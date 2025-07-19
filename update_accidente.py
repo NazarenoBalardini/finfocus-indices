@@ -22,15 +22,17 @@ ART_MAP = {
 async def fetch_latest_resolution_url(page):
     # 1) vamos a la página de listado
     await page.goto(INDEX_URL, wait_until="networkidle")
-    # 2) esperamos cualquier fila de tabla, que indica que cargó la lista
-    await page.wait_for_selector("tbody tr", timeout=60000)
 
-    # 3) selecciono la ÚLTIMA fila de la tabla de listados y clickeo su link
-    ultima_fila = page.locator("tbody tr").last
+    # 2) espero a que aparezca la tabla de fichas
+    await page.wait_for_selector("table.listado-fichas tbody tr", timeout=60000)
+
+    # 3) clickeo el link de la última fila
+    ultima_fila = page.locator("table.listado-fichas tbody tr").last
     await ultima_fila.locator("a[href*='/ficha/']").click()
 
     # 4) espero a que cargue la ficha concreta
     await page.wait_for_selector("article.resolucion, .ficha-detalle", timeout=60000)
+
     return page.url
 
 async def fetch_data():
