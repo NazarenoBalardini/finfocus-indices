@@ -2,9 +2,12 @@ name: 🏦 Actualizar activa.json
 
 on:
   schedule:
-    # Cada día a las 09:00 UTC (ajusta si hace falta)
-    - cron: '0 9 * * *'
+    # Permite correrlo manualmente desde Actions ↗️
+    workflow_dispatch:
 
+    # Y sigue corriéndolo cada día a las 09:00 UTC
+    schedule:
+    - cron: '0 9 * * *'
 jobs:
   update:
     runs-on: ubuntu-latest
