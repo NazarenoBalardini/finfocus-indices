@@ -16,7 +16,9 @@ jobs:
         run: |
           pip install --upgrade pip
           # librerías necesarias para update_accidente.py
-          pip install beautifulsoup4 requests
+          pip install beautifulsoup4 requests playwright
+          # instalar los navegadores de Playwright
+          playwright install --with-deps
           # si existe requirements.txt, instálalo también
           if [ -f requirements.txt ]; then
             echo "Instalando dependencias de requirements.txt..."
