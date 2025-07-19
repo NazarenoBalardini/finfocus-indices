@@ -11,9 +11,12 @@ from dateutil.relativedelta import relativedelta
 # Suprimir warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-CATALOGO      = "https://www.bcra.gob.ar/Catalogo/Content/files/json/principales-variables-v3.json"
+CATALOGO      = (
+    "https://www.bcra.gob.ar/Catalogo/Content/files/json/"
+    "principales-variables-v3.json"
+)
 DATA          = "indices/inflacion.json"
-ID_INFLACION  = "27"  # idVariable de Inflación mensual
+ID_INFLACION  = 27  # idVariable de Inflación mensual (como entero)
 ABBR          = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
 
 def cargar():
@@ -27,34 +30,38 @@ def guardar(d):
         json.dump(d, f, ensure_ascii=False, indent=2)
 
 def obtener_indec():
-    """
-    Descarga el JSON de principales-variables y
-    extrae la última observación de idVariable=27.
-    """
     resp = requests.get(CATALOGO, timeout=10, verify=False)
     resp.raise_for_status()
-    catalogo = resp.json()  # lista de entradas
+    catalogo = resp.json()
 
     obs = []
     for entry in catalogo:
-        # Solo procesar si entry es dict
+        # si viene como string, skip
         if not isinstance(entry, dict):
             continue
-        if str(entry.get("c")) != ID_INFLACION:
+        # Puede venir en 'c' (string) o en 'idVariable' (int)
+        idvar = entry.get("idVariable", entry.get("c"))
+        try:
+            idvar = int(idvar)
+        except Exception:
             continue
-        fch   = entry.get("fch")    # e.g. '30/06/2025'
-        val_s = entry.get("valor")  # e.g. '1,6'
-        if not fch or not val_s:
+        if idvar != ID_INFLACION:
             continue
-        pct = float(val_s.replace(".", "").replace(",", "."))
+
+        fch = entry.get("fch")     # ej. '30/06/2025'
+        val = entry.get("valor")   # ej. '1,6'
+        if not fch or not val:
+            continue
+        # convertimos '1,6' → 1.6
+        pct = float(val.replace(".", "").replace(",", "."))
         obs.append((fch, pct))
 
     if not obs:
         raise RuntimeError("No encontré datos de inflación mensual (ID 27).")
 
-    # Tomar la última fecha
-    def parse_fch(f):
-        return datetime.strptime(f, "%d/%m/%Y")
+    # tomamos la última fecha
+    def parse_fch(s):
+        return datetime.strptime(s, "%d/%m/%Y")
     fch_str, pct = max(obs, key=lambda x: parse_fch(x[0]))
 
     dt    = parse_fch(fch_str)
@@ -70,7 +77,7 @@ def main():
         print(f"{clave!r} ya existe en {DATA}, nada que hacer.")
         return
 
-    # Calcular mes anterior
+    # calcular mes anterior
     mon, yy = clave.split("-")
     idx      = ABBR.index(mon)
     if idx == 0:
@@ -85,7 +92,7 @@ def main():
         raise RuntimeError(f"Falta el valor de {prev_key} en {DATA}")
 
     prev_val = float(data[prev_key])
-    new_val  = round(prev_val * (1 + pct/100), 4)
+    new_val  = round(prev_val * (1 + pct / 100), 4)
 
     data[clave] = new_val
     guardar(data)
