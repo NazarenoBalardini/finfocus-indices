@@ -12,14 +12,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Instalar dependencias (si existen)
+      - name: Instalar dependencias
         run: |
+          pip install --upgrade pip
+          # librerías necesarias para update_accidente.py
+          pip install beautifulsoup4 requests
+          # si existe requirements.txt, instálalo también
           if [ -f requirements.txt ]; then
-            echo "Encontrado requirements.txt, instalando..."
-            pip install --upgrade pip
+            echo "Instalando dependencias de requirements.txt..."
             pip install -r requirements.txt
-          else
-            echo "No hay requirements.txt, saltando instalación."
           fi
 
       - name: Ejecutar script de actualización
