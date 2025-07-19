@@ -37,20 +37,21 @@ def obtener_indec():
     """
     resp = requests.get(CATALOGO, timeout=10, verify=False)
     resp.raise_for_status()
-    catalogo = resp.json()  # lista de dicts
+    catalogo = resp.json()  # lista de dicts o strings
 
     obs = []
-    for entry in catalogo:
-        if not isinstance(entry, dict):
+    for item in catalogo:
+        # Si el item es str, parsearlo
+        entry = json.loads(item) if isinstance(item, str) else item
+        if str(entry.get("c")) != ID_INFLACION:
             continue
-        if str(entry.get("c")) == ID_INFLACION:
-            fch   = entry.get("fch")    # '30/06/2025'
-            val_s = entry.get("valor")  # '1,6'
-            if not fch or not val_s:
-                continue
-            # convertir porcentaje
-            pct = float(val_s.replace(".", "").replace(",", "."))
-            obs.append((fch, pct))
+        fch   = entry.get("fch")    # '30/06/2025'
+        val_s = entry.get("valor")  # '1,6'
+        if not fch or not val_s:
+            continue
+        # convertir porcentaje
+        pct = float(val_s.replace(".", "").replace(",", "."))
+        obs.append((fch, pct))
 
     if not obs:
         raise RuntimeError("No encontré datos de inflación mensual en el catálogo")
