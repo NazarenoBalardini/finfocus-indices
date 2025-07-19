@@ -4,76 +4,67 @@
 import os
 import json
 import requests
-import urllib3
+from bs4 import BeautifulSoup
 from datetime import datetime
 
-# Desactivar warnings SSL (por si el host tiene certificado autofirmado)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-CATALOGO_URL = (
-    "https://www.bcra.gob.ar/Catalogo/Content/files/json/"
-    "principales-variables-v3.json"
-)
-ACTIVO_FILE = "indices/pasiva.json"
-ID_VARIABLE = "43"  # Tasa de uso de la Justicia
+URL          = "https://www.bcra.gob.ar/PublicacionesEstadisticas/Principales_variables.asp"
+ACTIVO_FILE  = "indices/pasiva.json"
+BUSCAR_TEXTO = "uso de la Justicia"  # parte del texto que identifica la fila
 
 def cargar_pasiva():
-    """Carga el JSON existente o devuelve {} si no existe."""
     if os.path.exists(ACTIVO_FILE):
         with open(ACTIVO_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def guardar_pasiva(data):
-    """Guarda el dict en pasiva.json con indentado."""
     with open(ACTIVO_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def obtener_ultimo():
     """
-    Descarga el JSON de catálogo y devuelve (fecha_iso, valor) para ID_VARIABLE.
-    Soporta 'DD/MM/YYYY' y 'DD-MM-YYYY'.
+    Scrapea la tabla de Principales Variables y devuelve
+    (fecha_iso, valor) de la fila que contiene BUSCAR_TEXTO.
     """
-    resp = requests.get(CATALOGO_URL, timeout=10, verify=False)
+    resp = requests.get(URL, timeout=10)
     resp.raise_for_status()
-    catalogo = resp.json()  # Lista de dicts
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    for item in catalogo:
-        # Si en tu JSON vienen como strings anidados, descoméntalo:
-        # if isinstance(item, str):
-        #     item = json.loads(item)
+    # Buscamos la tabla principal: suele ser la primera
+    table = soup.find("table")
+    if not table:
+        raise RuntimeError("No encontré ninguna <table> en la página.")
 
-        if str(item.get("c")) == ID_VARIABLE:
-            fch = item.get("fch")      # ej. '19/07/2025' o '19-07-2025'
-            valor = item.get("valor")
-
-            # Normalizar separadores a '/'
-            fch_normal = fch.replace("-", "/")
-
-            # Parsear fecha a ISO 'YYYY-MM-DD'
+    # Iteramos filas
+    for row in table.select("tr"):
+        cols = [td.get_text(strip=True) for td in row.select("td")]
+        if len(cols) >= 3 and BUSCAR_TEXTO.lower() in cols[0].lower():
+            # cols[1] es la fecha en 'DD/MM/YYYY', cols[2] el valor con '.' y ','
+            fch = cols[1]
+            val = cols[2]
+            # parsear fecha a ISO
             try:
-                fecha_iso = datetime.strptime(fch_normal, "%d/%m/%Y").date().isoformat()
-            except Exception:
+                fecha_iso = datetime.strptime(fch, "%d/%m/%Y").date().isoformat()
+            except ValueError:
                 raise RuntimeError(f"Formato de fecha inesperado: {fch}")
-
-            # Convertir valor a float
+            # convertir valor a float
+            # quitamos puntos de miles y usamos coma decimal
+            val_n = val.replace(".", "").replace(",", ".")
             try:
-                v = float(valor)
-            except Exception:
-                raise RuntimeError(f"Valor numérico inválido: {valor}")
-
+                v = float(val_n)
+            except ValueError:
+                raise RuntimeError(f"Valor numérico inválido: {val}")
             return fecha_iso, v
 
-    raise RuntimeError(f"Variable {ID_VARIABLE} no encontrada en catálogo")
+    raise RuntimeError(f"No encontré ninguna fila con '{BUSCAR_TEXTO}'")
 
 def main():
     data = cargar_pasiva()
     fecha, valor = obtener_ultimo()
-
-    print(f"Último dato BCRA serie {ID_VARIABLE}: {fecha} → {valor}")
+    print(f"Último dato scraped: {fecha} → {valor}")
 
     if fecha in data:
-        print(f"Ya registrado {fecha} en {ACTIVO_FILE}, nada que hacer.")
+        print(f"Ya existe {fecha} en {ACTIVO_FILE}, nada que hacer.")
         return
 
     data[fecha] = valor
