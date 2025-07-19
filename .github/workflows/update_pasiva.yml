@@ -1,38 +1,47 @@
 name: 💧 Actualizar pasiva.json
 
 permissions:
-contents: write
+  contents: write
 
 on:
-workflow_dispatch: {}
-schedule:
-- cron: '0 9 * * *'
+  # Se dispara al hacer push a main (para la primera ejecución)
+  push:
+    branches:
+      - main
+
+  # Permite ejecutarlo manualmente desde la UI
+  workflow_dispatch:
+
+  # Y también según el cron diario (09:00 UTC)
+  schedule:
+    - cron: '0 9 * * *'
 
 jobs:
-update:
-runs-on: ubuntu-latest
-steps:
-  - uses: actions/checkout@v3
+  update:
+    runs-on: ubuntu-latest
 
-  - name: Setup Python
-    uses: actions/setup-python@v4
-    with:
-      python-version: '3.x'
+    steps:
+      - uses: actions/checkout@v3
 
-  - name: Instalar requests
-    run: pip install requests
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-  - name: Ejecutar update_pasiva.py
-    env:
-      BCRA_API_KEY: ${{ secrets.BCRA_API_KEY }}
-    run: python update_pasiva.py
+      - name: Instalar requests
+        run: pip install requests
 
-  - name: Commit & Push pasiva.json si cambió
-    run: |
-      git config user.name "github-actions[bot]"
-      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      git add indices/pasiva.json
-      if ! git diff --cached --quiet; then
-        git commit -m "🔄 Actualiza pasiva.json"
-        git push
-      fi
+      - name: Ejecutar update_pasiva.py
+        env:
+          BCRA_API_KEY: ${{ secrets.BCRA_API_KEY }}
+        run: python update_pasiva.py
+
+      - name: Commit & Push pasiva.json si cambió
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add indices/pasiva.json
+          if ! git diff --cached --quiet; then
+            git commit -m "🔄 Actualiza pasiva.json"
+            git push
+          fi
