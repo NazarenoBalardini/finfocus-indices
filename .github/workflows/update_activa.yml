@@ -30,7 +30,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add activa.json
+          git add indices/activa.json
           # sólo commitea si hay diferencias
-          git diff --cached --quiet \
-            || (git commit -m "🔄 Actualiza activa.json" && git push)
+         git diff --cached --quiet \
+           || (git commit -m "🔄 Actualiza indices/activa.json" && git push)
