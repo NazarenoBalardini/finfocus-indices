@@ -1,0 +1,35 @@
+name: Update SMVM
+
+on:
+  schedule:
+    - cron: '0 18 1 * *'    # Corre el día 1 de cada mes a las 18:00 UTC
+  workflow_dispatch:       # También puedes ejecutarlo manualmente
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4
+
+      - name: Ejecutar update_smvm.py
+        run: python update_smvm.py
+
+      - name: Commit & Push smvm.json si cambió
+        run: |
+          if [[ `git status --porcelain` ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add indices/smvm.json
+            git commit -m "🔄 Actualiza SMVM al $(date +'%b-%y')"
+            git push
+          else
+            echo "No hay cambios en smvm.json"
+          fi
