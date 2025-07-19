@@ -35,21 +35,19 @@ def obtener_ultimo():
     """
     resp = requests.get(CATALOGO_URL, timeout=10, verify=False)
     resp.raise_for_status()
-    catalogo = resp.json()
-
-    # A veces cada item es un str JSON anidado
-    if isinstance(catalogo, str):
-        catalogo = json.loads(catalogo)
+    catalogo = resp.json()  # debería ser una lista de dicts
 
     for item in catalogo:
-        obj = json.loads(item) if isinstance(item, str) else item
-        if str(obj.get("c")) == ID_VARIABLE:
-            fch = obj.get("fch")      # 'DD/MM/YYYY'
-            valor = obj.get("valor")
+        # Cada item es dict con claves 'c', 'fch', 'valor', etc.
+        if str(item.get("c")) == ID_VARIABLE:
+            fch = item.get("fch")    # formato 'DD/MM/YYYY'
+            valor = item.get("valor")
+            # Parsear fecha a ISO
             try:
                 fecha_iso = datetime.strptime(fch, "%d/%m/%Y").date().isoformat()
             except Exception:
                 raise RuntimeError(f"Formato de fecha inesperado: {fch}")
+            # Convertir valor a float
             try:
                 v = float(valor)
             except Exception:
