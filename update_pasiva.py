@@ -5,79 +5,80 @@ import os
 import json
 import requests
 import urllib3
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Desactivar warnings SSL inseguro
+# Desactivar warnings SSL (por si el host tiene certificado autofirmado)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-SERIE_ID    = "43"
-API_BASE    = "https://api.bcra.gob.ar/estadisticas/v1"
+CATALOGO_URL = (
+    "https://www.bcra.gob.ar/Catalogo/Content/files/json/"
+    "principales-variables-v3.json"
+)
 ACTIVO_FILE = "indices/pasiva.json"
+ID_VARIABLE = "43"  # Tasa de uso de la Justicia
 
 def cargar_pasiva():
+    """Carga el JSON existente o devuelve {} si no existe."""
     if os.path.exists(ACTIVO_FILE):
         with open(ACTIVO_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def guardar_pasiva(data):
+    """Guarda el dict en pasiva.json con indentado."""
     with open(ACTIVO_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def obtener_nuevos(desde_date, hasta_date):
+def obtener_ultimo():
     """
-    Llama al endpoint v1.0 con rango de fecha-time, devuelve lista de {'fecha','valor'}.
-    Se usa verify=False para evitar errores de certificado.
+    Descarga el JSON de catálogo y devuelve (fecha_iso, valor) para ID_VARIABLE.
+    Soporta 'DD/MM/YYYY' y 'DD-MM-YYYY'.
     """
-    desde = f"{desde_date}T00:00:00"
-    hasta = f"{hasta_date}T23:59:59"
-    url   = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
-    try:
-        resp = requests.get(url, timeout=10, verify=False)
-        resp.raise_for_status()
-    except requests.HTTPError as e:
-        code = e.response.status_code if e.response else "?"
-        print(f"WARNING: HTTP {code} al pedir {desde_date} → {hasta_date}, omitido.")
-        return []
-    except requests.RequestException as e:
-        print(f"WARNING: Error de red al pedir {desde_date} → {hasta_date}: {e}")
-        return []
+    resp = requests.get(CATALOGO_URL, timeout=10, verify=False)
+    resp.raise_for_status()
+    catalogo = resp.json()  # Lista de dicts
 
-    payload = resp.json()
-    return payload.get("results", [])
+    for item in catalogo:
+        # Si en tu JSON vienen como strings anidados, descoméntalo:
+        # if isinstance(item, str):
+        #     item = json.loads(item)
+
+        if str(item.get("c")) == ID_VARIABLE:
+            fch = item.get("fch")      # ej. '19/07/2025' o '19-07-2025'
+            valor = item.get("valor")
+
+            # Normalizar separadores a '/'
+            fch_normal = fch.replace("-", "/")
+
+            # Parsear fecha a ISO 'YYYY-MM-DD'
+            try:
+                fecha_iso = datetime.strptime(fch_normal, "%d/%m/%Y").date().isoformat()
+            except Exception:
+                raise RuntimeError(f"Formato de fecha inesperado: {fch}")
+
+            # Convertir valor a float
+            try:
+                v = float(valor)
+            except Exception:
+                raise RuntimeError(f"Valor numérico inválido: {valor}")
+
+            return fecha_iso, v
+
+    raise RuntimeError(f"Variable {ID_VARIABLE} no encontrada en catálogo")
 
 def main():
-    data   = cargar_pasiva()
-    fechas = sorted(data.keys())
+    data = cargar_pasiva()
+    fecha, valor = obtener_ultimo()
 
-    # Calcula rango a pedir: desde día siguiente a última fecha guardada
-    if fechas:
-        ultima = datetime.fromisoformat(fechas[-1]).date()
-        inicio = (ultima + timedelta(days=1)).isoformat()
-    else:
-        inicio = (datetime.now().date() - timedelta(days=30)).isoformat()
-    fin = datetime.now().date().isoformat()
+    print(f"Último dato BCRA serie {ID_VARIABLE}: {fecha} → {valor}")
 
-    print(f"Buscando serie {SERIE_ID} desde {inicio} hasta {fin}...")
-    obs = obtener_nuevos(inicio, fin)
+    if fecha in data:
+        print(f"Ya registrado {fecha} en {ACTIVO_FILE}, nada que hacer.")
+        return
 
-    añadidos = 0
-    for rec in obs:
-        fecha = rec.get("fecha", rec.get("d", ""))[:10]
-        valor = rec.get("valor", rec.get("v", None))
-        try:
-            v = float(valor)
-        except Exception:
-            continue
-        if fecha not in data:
-            data[fecha] = v
-            añadidos += 1
-
-    if añadidos:
-        guardar_pasiva(data)
-        print(f"✅ Añadidas {añadidos} observaciones a {ACTIVO_FILE}.")
-    else:
-        print("⚠️ No hubo nuevas observaciones para agregar.")
+    data[fecha] = valor
+    guardar_pasiva(data)
+    print(f"✅ Agregado {fecha}: {valor} a {ACTIVO_FILE}")
 
 if __name__ == "__main__":
     main()
