@@ -1,46 +1,34 @@
-# .github/workflows/actualizar-pisos.yml
-name: Actualizar pisos mínimos
+name: Actualizar Pisos Mínimos
 
 on:
   schedule:
-    # Corre todos los días a las 02:00 UTC
-    - cron: '0 2 * * *'
+    - cron: '0 4 * * *'  # Todos los días a las 04:00 UTC
   workflow_dispatch:
 
 jobs:
   actualizar-pisos:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Chequear código
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Instalar dependencias si existen
+      - name: Instalar dependencias (si existen)
         run: |
           if [ -f requirements.txt ]; then
+            echo "Encontrado requirements.txt, instalando..."
             pip install --upgrade pip
             pip install -r requirements.txt
           else
-            echo "requirements.txt no encontrado — salto instalación de dependencias"
+            echo "No hay requirements.txt, saltando instalación."
           fi
 
       - name: Ejecutar script de actualización
         run: |
-          python scripts/actualizar_pisos.py
-
-      - name: Commit y push de cambios
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add accidente/*.json
-          if git diff --cached --quiet; then
-            echo "No hay cambios en los JSON"
+          if [ -f scripts/actualizar_pisos.py ]; then
+            python scripts/actualizar_pisos.py
+          elif [ -f actualizar_pisos.py ]; then
+            python actualizar_pisos.py
           else
-            git commit -m "🔄 Actualiza pisos mínimos desde la resolución más reciente"
-            git push
+            echo "Error: no se encontró actualizar_pisos.py en ninguna ruta esperada."
+            exit 1
           fi
