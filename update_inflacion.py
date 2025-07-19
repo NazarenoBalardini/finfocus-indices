@@ -3,9 +3,9 @@
 
 import os
 import json
+import re
 import requests
 import urllib3
-from bs4 import BeautifulSoup
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -31,37 +31,29 @@ def guardar(d):
 
 def obtener_indec():
     """
-    Scrapea INDEC y devuelve (clave, pct) donde:
-      - clave: 'jun-25'
-      - pct: 1.6 (float)
+    Usa regex directamente sobre el HTML para extraer:
+      - mes (p.ej. 'junio'), año ('2025') y pct ('1,6')
+    tras la cadena 'Precios al consumidor' y 'Variación mensual'.
+    Devuelve ('jun-25', 1.6)
     """
     resp = requests.get(URL, timeout=10, verify=False)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+    txt = resp.text.replace("\n"," ")
 
-    # buscamos el bloque de "Precios al consumidor"
-    # suele haber un <h2> o <h3> con ese texto y vecino un <p> con "junio 2025: 1,6%"
-    nodo = soup.find(lambda tag: tag.name in ("h2","h3") 
-                     and "Precios al consumidor" in tag.get_text())
-    if not nodo:
-        raise RuntimeError("No encontré el título 'Precios al consumidor'")
+    # Busca: Precios al consumidor ... Variación mensual ... Junio 2025 ... 1,6%
+    m = re.search(
+        r"Precios\s+al\s+consumidor.*?Variación\s+mensual.*?([A-Za-z]+)\s+(\d{4}).*?([\d]+,[\d]+)%",
+        txt, re.IGNORECASE|re.DOTALL
+    )
+    if not m:
+        raise RuntimeError("No pude extraer Precios al consumidor/Variación mensual con regex")
 
-    # el siguiente <p> contiene el mes y la variación
-    p = nodo.find_next_sibling("p")
-    texto = p.get_text(strip=True)  # ej. "junio 2025: 1,6%"
+    mes_full, año, pct_str = m.group(1).lower(), m.group(2), m.group(3)
+    mes_abbr = mes_full[:3]
+    if mes_abbr not in ABBR:
+        raise RuntimeError(f"Mes inesperado: {mes_full}")
 
-    # extraer mes y año
-    mes_str, resto = texto.split(":",1)
-    mes_str = mes_str.strip().lower()   # "junio 2025"
-    pct_str = resto.strip().replace("%","")  # "1,6"
-
-    # parsear mes/año
-    nombre, año = mes_str.split()
-    m = ABBR.index(nombre[:3]) + 1
-    yy = año[-2:]
-    clave = f"{nombre[:3]}-{yy}"
-
-    # parsear porcentaje a float
+    clave = f"{mes_abbr}-{año[-2:]}"
     pct = float(pct_str.replace(",", "."))
 
     return clave, pct
@@ -76,13 +68,10 @@ def main():
         return
 
     # calcular valor nuevo: valor_mes_anterior * (1 + pct/100)
-    # extraemos el mes anterior:
-    # si clave="jun-25", mes_ant = may-25
     mon, yy = clave.split("-")
     idx = ABBR.index(mon)
-    # obtenemos abreviatura mes anterior
+    # mes anterior
     if idx == 0:
-        # de ene-XX a dic-(XX-1)
         prev_mon = ABBR[-1]
         prev_yy = f"{int(yy)-1:02d}"
     else:
