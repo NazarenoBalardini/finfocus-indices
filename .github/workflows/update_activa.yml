@@ -1,0 +1,36 @@
+name: 🏦 Actualizar activa.json
+
+on:
+  schedule:
+    # Cada día a las 09:00 UTC (ajusta si hace falta)
+    - cron: '0 9 * * *'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Clona tu repo
+      - uses: actions/checkout@v3
+
+      # 2) Configura Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # 3) Instala dependencias
+      - name: Instalar librerías
+        run: pip install requests beautifulsoup4
+
+      # 4) Ejecuta tu script
+      - name: Ejecutar update_activa.py
+        run: python update_activa.py
+
+      # 5) Si cambia activa.json, hace commit y push
+      - name: Commit & Push si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add activa.json
+          git diff --cached --quiet || (git commit -m "🔄 Actualiza activa.json" && git push)
