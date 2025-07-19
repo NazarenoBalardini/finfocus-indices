@@ -8,24 +8,30 @@ from playwright.async_api import async_playwright
 # 1) Página que lista todas las fichas de resolución
 INDEX_URL = "https://trivia.consejo.org.ar/listado/pisos_minimos_en_las_prestaciones_por_incapacidad_permanente"
 
-# 2) Mapeo de artículo → nombre de archivo
+# 2) Mapeo de texto de columna → sufijo de archivo
 ART_MAP = {
-    "Art. 3":      "3",
-    "Art. 11A":   "11A",
-    "Art. 11B":   "11B",
-    "Art. 11C":   "11C",
-    "Art. 14A":   "14A",
-    "Art. 14B":   "14B",
-    "Art. 15":    "15",
+    "Art. 11A":    "11A",
+    "Art. 11B":    "11B",
+    "Art. 11C":    "11C",
+    "Art. 14.2 A": "14A",
+    "Art. 14.2 B": "14B",
+    "Art. 15.2":   "15",
+    "Art. 3":      "3",        # si en la tabla figura sólo "Art. 3" para el adicional
 }
 
 async def fetch_latest_resolution_url(page):
-    # Abre el índice y busca el enlace a la última ficha
-    await page.goto(INDEX_URL)
-    await page.wait_for_selector("a[href*='/ficha/']")
-    # Supongamos que la lista está ordenada: tomamos el primer link que aparezca
-    href = await page.get_attribute("a[href*='/ficha/']", "href")
-    return page.url.rsplit("/", 1)[0] + href  # construye URL absoluta
+    # 1) vamos a la página de listado
+    await page.goto(INDEX_URL, wait_until="networkidle")
+    # 2) esperamos cualquier tabla (es la de fichas)
+    await page.wait_for_selector("table")
+
+    # 3) selecciono la ÚLTIMA fila de la tabla y clickeo su link
+    ultima_fila = page.locator("table tbody tr").last
+    await ultima_fila.locator("a[href*='/ficha/']").click()
+
+    # 4) espero a que cargue la ficha concreta
+    await page.wait_for_selector("article.resolucion, .ficha-detalle", timeout=60000)
+    return page.url
 
 async def fetch_data():
     async with async_playwright() as p:
@@ -37,8 +43,8 @@ async def fetch_data():
 
         # 2) visitamos esa ficha
         await page.goto(latest_url)
-        # el botón para ver “Pisos mínimos” puede variar; ajusta el selector si hace falta
-        await page.click("text=Pisos mínimos")
+        # pulsamos el botón para mostrar "Pisos mínimos"
+        await page.click("text=/Pisos mínimos/i")
         await page.wait_for_selector("table")
 
         html = await page.content()
@@ -75,3 +81,4 @@ async def fetch_data():
 
 if __name__ == "__main__":
     asyncio.run(fetch_data())
+
