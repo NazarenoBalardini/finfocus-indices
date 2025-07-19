@@ -1,12 +1,12 @@
 name: Actualizar inflación esperada
 
 on:
+  workflow_dispatch:    # Permite ejecución manual desde la UI de Actions
   schedule:
-    # Primer día de cada mes a las 00:30 UTC
-    - cron: '30 0 1 * *'
+    - cron: '30 0 1 * *'  # Cada día 1 a las 00:30 UTC
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +23,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
 
-      - name: Ejecutar actualización
+      - name: Ejecutar script de actualización
         run: python update_inflacion_esperada.py
 
       - name: Commit y push cambios
