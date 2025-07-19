@@ -27,13 +27,14 @@ async def fetch_latest_resolution_url(page):
     await page.wait_for_selector("a[href*='/ficha/']", timeout=60000)
 
     # 3) clickeamos el último de esos enlaces
-    const enlaces = page.locator("a[href*='/ficha/']");
+    enlaces = page.locator("a[href*='/ficha/']")
     await enlaces.last.click()
 
     # 4) esperamos a que cargue la ficha concreta
     await page.wait_for_selector("article.resolucion, .ficha-detalle", timeout=60000)
 
     return page.url
+
 
 async def fetch_data():
     async with async_playwright() as p:
