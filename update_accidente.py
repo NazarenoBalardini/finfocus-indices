@@ -23,14 +23,14 @@ async def fetch_latest_resolution_url(page):
     # 1) vamos a la página de listado
     await page.goto(INDEX_URL, wait_until="networkidle")
 
-    # 2) espero a que aparezca la tabla de fichas
-    await page.wait_for_selector("table.listado-fichas tbody tr", timeout=60000)
+    # 2) esperamos a que carguen los enlaces a fichas
+    await page.wait_for_selector("a[href*='/ficha/']", timeout=60000)
 
-    # 3) clickeo el link de la última fila
-    ultima_fila = page.locator("table.listado-fichas tbody tr").last
-    await ultima_fila.locator("a[href*='/ficha/']").click()
+    # 3) clickeamos el último de esos enlaces
+    const enlaces = page.locator("a[href*='/ficha/']");
+    await enlaces.last.click()
 
-    # 4) espero a que cargue la ficha concreta
+    # 4) esperamos a que cargue la ficha concreta
     await page.wait_for_selector("article.resolucion, .ficha-detalle", timeout=60000)
 
     return page.url
