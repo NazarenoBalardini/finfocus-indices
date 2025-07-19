@@ -27,7 +27,7 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Ejecutar update_cer.py
-        run: python indices/update_cer.py
+        run: python update_cer.py
 
       - name: Commit & Push cer.json si cambió
         run: |
