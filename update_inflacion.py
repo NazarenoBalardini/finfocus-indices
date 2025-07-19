@@ -5,19 +5,18 @@ import os
 import json
 import requests
 import urllib3
+from bs4 import BeautifulSoup
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 # Suprimir warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-CATALOGO      = (
-    "https://www.bcra.gob.ar/Catalogo/Content/files/json/"
-    "principales-variables-v3.json"
-)
-DATA          = "indices/inflacion.json"
-ID_INFLACION  = 27  # idVariable de Inflación mensual (como entero)
-ABBR          = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
+# URL de BCRA para “Principales Variables”
+URL       = "https://www.bcra.gob.ar/PublicacionesEstadisticas/Principales_variables.asp"
+DATA      = "indices/inflacion.json"
+ABBR      = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
+TARGET_TXT = "Inflación mensual"  # texto exacto a buscar en la primera celda
 
 def cargar():
     if os.path.exists(DATA):
@@ -30,43 +29,38 @@ def guardar(d):
         json.dump(d, f, ensure_ascii=False, indent=2)
 
 def obtener_indec():
-    resp = requests.get(CATALOGO, timeout=10, verify=False)
+    """
+    Scrapea la tabla de Principales Variables del BCRA,
+    busca la fila donde la primera celda contiene TARGET_TXT,
+    extrae la fecha (DD/MM/YYYY) y el porcentaje (X,X),
+    y retorna (clave, pct) donde clave es 'jun-25'.
+    """
+    resp = requests.get(URL, timeout=10, verify=False)
     resp.raise_for_status()
-    catalogo = resp.json()
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    obs = []
-    for entry in catalogo:
-        # si viene como string, skip
-        if not isinstance(entry, dict):
+    table = soup.find("table")
+    if not table:
+        raise RuntimeError("No encontré la tabla de Principales Variables.")
+    for tr in table.select("tbody tr"):
+        cols = [td.get_text(strip=True) for td in tr.select("td")]
+        if len(cols) < 3:
             continue
-        # Puede venir en 'c' (string) o en 'idVariable' (int)
-        idvar = entry.get("idVariable", entry.get("c"))
-        try:
-            idvar = int(idvar)
-        except Exception:
-            continue
-        if idvar != ID_INFLACION:
-            continue
+        if TARGET_TXT.lower() in cols[0].lower():
+            # cols[1] = '30/06/2025', cols[2] = '1,6'
+            fecha_str = cols[1]
+            pct_str   = cols[2]
+            # parsear fecha
+            try:
+                dt = datetime.strptime(fecha_str, "%d/%m/%Y")
+            except ValueError:
+                raise RuntimeError(f"Formato inesperado de fecha: {fecha_str}")
+            clave = f"{ABBR[dt.month-1]}-{str(dt.year)[2:]}"
+            # parsear porcentaje
+            pct = float(pct_str.replace(".", "").replace(",", "."))
+            return clave, pct
 
-        fch = entry.get("fch")     # ej. '30/06/2025'
-        val = entry.get("valor")   # ej. '1,6'
-        if not fch or not val:
-            continue
-        # convertimos '1,6' → 1.6
-        pct = float(val.replace(".", "").replace(",", "."))
-        obs.append((fch, pct))
-
-    if not obs:
-        raise RuntimeError("No encontré datos de inflación mensual (ID 27).")
-
-    # tomamos la última fecha
-    def parse_fch(s):
-        return datetime.strptime(s, "%d/%m/%Y")
-    fch_str, pct = max(obs, key=lambda x: parse_fch(x[0]))
-
-    dt    = parse_fch(fch_str)
-    clave = f"{ABBR[dt.month-1]}-{str(dt.year)[2:]}"
-    return clave, pct
+    raise RuntimeError(f"No encontré ninguna fila con '{TARGET_TXT}'")
 
 def main():
     data = cargar()
@@ -77,7 +71,7 @@ def main():
         print(f"{clave!r} ya existe en {DATA}, nada que hacer.")
         return
 
-    # calcular mes anterior
+    # mes anterior
     mon, yy = clave.split("-")
     idx      = ABBR.index(mon)
     if idx == 0:
@@ -92,7 +86,7 @@ def main():
         raise RuntimeError(f"Falta el valor de {prev_key} en {DATA}")
 
     prev_val = float(data[prev_key])
-    new_val  = round(prev_val * (1 + pct / 100), 4)
+    new_val  = round(prev_val * (1 + pct/100), 4)
 
     data[clave] = new_val
     guardar(data)
