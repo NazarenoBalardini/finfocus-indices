@@ -1,0 +1,39 @@
+name: 🏦 Actualizar activa.json
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 9 * * *'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Instalar dependencias
+        run: pip install requests beautifulsoup4
+
+      - name: Ejecutar script
+        run: python update_activa.py
+
+      - name: Commit & Push si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Añadimos el archivo correcto
+          git add indices/activa.json
+          # Si hay cambios, commit y push
+          if ! git diff --cached --quiet; then
+            git commit -m "🔄 Actualiza indices/activa.json"
+            git push
+          fi
