@@ -29,11 +29,21 @@ def guardar_pasiva(data):
 def obtener_nuevos(desde: str, hasta: str):
     """
     Llama al endpoint oficial v2.0 para la serie 43 y rango de fechas.
-    Devuelve lista de dicts con keys 'fecha' y 'valor'.
+    Devuelve lista de dicts con keys 'fecha' y 'valor'. Si hay un
+    HTTPError (p.ej. 500), devuelve [] en lugar de fallar.
     """
     url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
-    resp = requests.get(url, timeout=10, verify=False)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(url, timeout=10, verify=False)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        code = e.response.status_code if e.response is not None else "?"
+        print(f"WARNING: HTTP {code} al llamar {url}, se omiten resultados para este rango.")
+        return []
+    except requests.RequestException as e:
+        print(f"WARNING: Error de red al llamar {url}: {e}")
+        return []
+
     payload = resp.json()
     return payload.get("results", [])
 
@@ -41,11 +51,12 @@ def main():
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Determinar rango de consulta
+    # Definir rango de consulta: desde día siguiente a la última fecha guardada
     if fechas:
         ultima = datetime.fromisoformat(fechas[-1]).date()
         desde  = (ultima + timedelta(days=1)).isoformat()
     else:
+        # Si no hay datos, obtenemos los últimos 30 días
         desde  = (datetime.now().date() - timedelta(days=30)).isoformat()
     hasta = datetime.now().date().isoformat()
 
