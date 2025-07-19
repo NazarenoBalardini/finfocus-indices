@@ -1,12 +1,12 @@
 name: 🏦 Actualizar activa.json
 
 permissions:
-  contents: write     # para que GITHUB_TOKEN pueda commitear
+  contents: write
 
 on:
-  workflow_dispatch: {}    # habilita corrida manual
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 9 * * *'    # todos los días a las 09:00 UTC
+    - cron: '0 9 * * *'
 
 jobs:
   update:
@@ -30,7 +30,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Añadimos el archivo correcto
           git add indices/activa.json
-          # sólo commitea si hay diferencias
-         git diff --cached --quiet \
-           || (git commit -m "🔄 Actualiza indices/activa.json" && git push)
+          # Si hay cambios, commit y push
+          if ! git diff --cached --quiet; then
+            git commit -m "🔄 Actualiza indices/activa.json"
+            git push
+          fi
