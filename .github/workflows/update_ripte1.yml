@@ -1,0 +1,40 @@
+name: 🔄 Actualizar ripte1.json
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
+
+jobs:
+  update_ripte1:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Instalar python-dateutil
+        run: pip install python-dateutil
+
+      - name: Ejecutar update_ripte1.py
+        run: python update_ripte1.py
+
+      - name: Commit & Push ripte1.json si cambió
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add indices/ripte1.json
+          if ! git diff --cached --quiet; then
+            git commit -m "🔄 Actualiza ripte1.json"
+            git push
+          fi
