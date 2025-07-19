@@ -28,8 +28,8 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Instalar requests
-        run: pip install requests
+      - name: Instalar dependencias
+        run: pip install requests bcraapi
 
       - name: Ejecutar update_pasiva.py
         env:
