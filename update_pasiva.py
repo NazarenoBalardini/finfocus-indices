@@ -4,7 +4,11 @@
 import os
 import json
 import requests
+import urllib3
 from datetime import datetime, timedelta
+
+# Desactivar warnings SSL inseguro
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 SERIE_ID    = "43"
 API_BASE    = "https://api.bcra.gob.ar/estadisticas/v1"
@@ -22,21 +26,21 @@ def guardar_pasiva(data):
 
 def obtener_nuevos(desde_date, hasta_date):
     """
-    Llama al endpoint v1.0 con rango de fecha-time, devuelve lista de {'fecha', 'valor'}.
+    Llama al endpoint v1.0 con rango de fecha-time, devuelve lista de {'fecha','valor'}.
+    Se usa verify=False para evitar errores de certificado.
     """
-    # Añadimos hora para cumplir formato DateTime de la API
     desde = f"{desde_date}T00:00:00"
     hasta = f"{hasta_date}T23:59:59"
     url   = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=10, verify=False)
         resp.raise_for_status()
     except requests.HTTPError as e:
         code = e.response.status_code if e.response else "?"
-        print(f"WARNING: HTTP {code} al pedir {desde_date} → {hasta_date}, resultados omitidos.")
+        print(f"WARNING: HTTP {code} al pedir {desde_date} → {hasta_date}, omitido.")
         return []
     except requests.RequestException as e:
-        print(f"WARNING: Error de red: {e}")
+        print(f"WARNING: Error de red al pedir {desde_date} → {hasta_date}: {e}")
         return []
 
     payload = resp.json()
@@ -46,12 +50,11 @@ def main():
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Rango: desde el día siguiente a la última fecha registrada
+    # Calcula rango a pedir: desde día siguiente a última fecha guardada
     if fechas:
-        ult   = datetime.fromisoformat(fechas[-1]).date()
-        inicio = (ult + timedelta(days=1)).isoformat()
+        ultima = datetime.fromisoformat(fechas[-1]).date()
+        inicio = (ultima + timedelta(days=1)).isoformat()
     else:
-        # Si no hay datos, arrancamos 30 días atrás
         inicio = (datetime.now().date() - timedelta(days=30)).isoformat()
     fin = datetime.now().date().isoformat()
 
@@ -60,7 +63,6 @@ def main():
 
     añadidos = 0
     for rec in obs:
-        # La API v1 devuelve {"fecha":"YYYY-MM-DDT00:00:00","valor":"123.45"} o keys 'd'/'v'
         fecha = rec.get("fecha", rec.get("d", ""))[:10]
         valor = rec.get("valor", rec.get("v", None))
         try:
