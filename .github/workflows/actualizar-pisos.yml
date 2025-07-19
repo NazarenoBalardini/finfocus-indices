@@ -18,11 +18,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Opción B1: borrar el bloque completo de pip install
-      # - name: Instalar dependencias
-      #   run: |
-      #     pip install -r requirements.txt
-
       # Opción B2: ejecutar sólo si existe requirements.txt
       - name: Instalar dependencias (si las hay)
         if: ${{ exists('requirements.txt') }}
