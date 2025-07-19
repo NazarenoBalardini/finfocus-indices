@@ -2,23 +2,20 @@
 # -*- coding: utf-8 -*-
 
 import os
-import re
 import json
+import re
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
-URL = "https://www.bna.com.ar/home/informacionalusuariofinanciero"
+URL         = "https://www.bna.com.ar/home/informacionalusuariofinanciero"
 ACTIVA_FILE = "indices/activa.json"
 
-def obtener_soup():
+def obtener_tna_pct():
+    """Descarga la página y extrae la T.N.A. (30d) como float (p.ej. 36.52)."""
     resp = requests.get(URL, timeout=10)
     resp.raise_for_status()
-    return BeautifulSoup(resp.text, "html.parser")
-
-def obtener_tna_pct():
-    """Devuelve T.N.A. (30 días) como float, p.ej. 36.52"""
-    soup = obtener_soup()
+    soup = BeautifulSoup(resp.text, "html.parser")
     for li in soup.find_all("li"):
         txt = li.get_text(strip=True)
         if "T.N.A." in txt:
@@ -26,19 +23,6 @@ def obtener_tna_pct():
             if m:
                 return float(m.group(1).replace(",", "."))
     raise RuntimeError("No encontré la T.N.A. en el HTML.")
-
-def obtener_fecha_vigencia():
-    """Extrae la fecha 'vigente desde el DD/MM/YYYY' de la cabecera."""
-    soup = obtener_soup()
-    header = soup.find(text=re.compile(r'vigente desde el', re.IGNORECASE))
-    if not header:
-        raise RuntimeError("No encontré la línea de 'vigente desde' en la página.")
-    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', header)
-    if not m:
-        raise RuntimeError("No pude parsear la fecha de vigencia.")
-    d, mo, y = m.groups()
-    fecha = datetime(year=int(y), month=int(mo), day=int(d)).date()
-    return fecha.isoformat()  # "YYYY-MM-DD"
 
 def cargar_activa():
     with open(ACTIVA_FILE, "r", encoding="utf-8") as f:
@@ -50,31 +34,27 @@ def guardar_activa(data):
 
 def main():
     data = cargar_activa()
-
-    fecha = obtener_fecha_vigencia()      # e.g. "2025-07-18"
-    if fecha in data:
-        print(f"Ya existe entrada para {fecha}, nada que hacer.")
-        return
-
-    # buscamos la última fecha anterior en el JSON
+    # 1) Última fecha y valor
     fechas = sorted(data.keys())
-    # todas las fechas < fecha, y tomamos la mayor
-    prevs = [f for f in fechas if f < fecha]
-    if not prevs:
-        raise RuntimeError("No hay fecha anterior en el JSON para tomar índice.")
-    prev_date = prevs[-1]
-    prev_val  = float(data[prev_date])    # e.g. 102.679
+    ult_fecha = datetime.fromisoformat(fechas[-1]).date()
+    ult_valor = float(data[fechas[-1]])
 
-    tna_pct    = obtener_tna_pct()        # e.g. 36.52
-    # calcula el interés para 30 días
-    tasa_periodica = (tna_pct/100) * 30/365  
-    nuevo_valor    = round(prev_val * (1 + tasa_periodica), 6)
+    # 2) Fecha siguiente
+    sig_fecha = (ult_fecha + timedelta(days=1)).isoformat()
 
-    data[fecha] = nuevo_valor
+    # 3) Obtener TNA y calcular tasa diaria decimal
+    tna_pct     = obtener_tna_pct()    # 36.52
+    tasa_diaria = (tna_pct/100) / 365   # ~0.001001
+
+    # 4) Calcular nuevo valor
+    nuevo_valor = round(ult_valor * (1 + tasa_diaria), 6)
+
+    # 5) Insertar y guardar
+    data[sig_fecha] = nuevo_valor
     guardar_activa(data)
 
-    print(f"[{fecha}] {prev_date}→{fecha}: {prev_val} → {nuevo_valor} "
-          f"(+{tasa_periodica*100:.4f}% en 30 días) guardado en {ACTIVA_FILE}")
+    print(f"[{sig_fecha}] {ult_valor} → {nuevo_valor} "
+          f"(+{tasa_diaria*100:.4f}% diario) en {ACTIVA_FILE}")
 
 if __name__ == "__main__":
     main()
