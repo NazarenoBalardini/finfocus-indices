@@ -24,11 +24,10 @@ jobs:
 
       - name: Ejecutar script de actualización
         run: |
-          if [ -f scripts/actualizar_pisos.py ]; then
-            python scripts/actualizar_pisos.py
-          elif [ -f actualizar_pisos.py ]; then
-            python actualizar_pisos.py
+          if [ -f update_accidente.py ]; then
+            echo "Ejecutando update_accidente.py..."
+            python update_accidente.py
           else
-            echo "Error: no se encontró actualizar_pisos.py en ninguna ruta esperada."
+            echo "Error: no se encontró update_accidente.py en la raíz del repo."
             exit 1
           fi
