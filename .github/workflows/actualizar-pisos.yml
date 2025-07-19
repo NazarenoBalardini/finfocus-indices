@@ -2,12 +2,11 @@ name: Actualizar pisos mínimos
 
 on:
   schedule:
-    # Corre cada día a las 2 AM UTC
     - cron: '0 2 * * *'
-  workflow_dispatch:    # para lanzarlo manualmente desde la UI de GitHub
+  workflow_dispatch:
 
 jobs:
-  build:
+  actualizar:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +18,14 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Instalar dependencias
+      # Opción B1: borrar el bloque completo de pip install
+      # - name: Instalar dependencias
+      #   run: |
+      #     pip install -r requirements.txt
+
+      # Opción B2: ejecutar sólo si existe requirements.txt
+      - name: Instalar dependencias (si las hay)
+        if: ${{ exists('requirements.txt') }}
         run: |
           pip install -r requirements.txt
 
@@ -27,7 +33,7 @@ jobs:
         run: |
           python scripts/actualizar_pisos.py
 
-      - name: Hacer commit y push de cambios
+      - name: Commit y push de cambios
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
