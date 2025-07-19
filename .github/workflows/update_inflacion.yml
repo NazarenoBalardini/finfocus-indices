@@ -24,7 +24,8 @@ jobs:
           python-version: '3.x'
 
       - name: Instalar dependencias
-        run: pip install requests beautifulsoup4 python-dateutil
+        run: |
+          pip install requests python-dateutil
 
       - name: Ejecutar update_inflacion.py
         run: python update_inflacion.py
