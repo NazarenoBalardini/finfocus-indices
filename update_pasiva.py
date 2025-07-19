@@ -7,85 +7,70 @@ import requests
 import urllib3
 from datetime import datetime, timedelta, date
 
-# Desactivar warnings de SSL inseguro
+# Desactivar warnings SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 SERIE_ID    = "43"
-API_BASE    = "https://api.bcra.gob.ar/estadisticas/v2.0"
+API_BASE    = "https://api.bcra.gob.ar/estadisticas/v1"
 ACTIVO_FILE = "indices/pasiva.json"
 
 def cargar_pasiva():
-    """Carga el JSON existente o devuelve {} si no existe."""
     if os.path.exists(ACTIVO_FILE):
         with open(ACTIVO_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def guardar_pasiva(data):
-    """Guarda el dict en pasiva.json con indentado."""
     with open(ACTIVO_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def _call_api(desde: str, hasta: str):
+def _llamada(desde: str, hasta: str):
     url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
     resp = requests.get(url, timeout=10, verify=False)
     resp.raise_for_status()
     return resp.json().get("results", [])
 
 def obtener_nuevos(desde: str, hasta: str):
-    """
-    Solicita al API oficial v2.0 el rango dado.
-    Si falla con 500 y era un solo día, reintenta incluyendo el día anterior.
-    """
     try:
-        results = _call_api(desde, hasta)
+        return _llamada(desde, hasta)
     except requests.exceptions.HTTPError as e:
-        code = e.response.status_code if e.response is not None else "?"
-        # Solo fallback si es un 500 y pedimos un solo día
+        code = e.response.status_code if e.response else "?"
+        # Si pide un solo día y da 500, reintenta con 2 días
         if code == 500 and desde == hasta:
-            prev = (date.fromisoformat(desde) - timedelta(days=1)).isoformat()
-            print(f"WARNING: HTTP 500 en {desde}, reintentando rango {prev}→{hasta}")
+            antes = (date.fromisoformat(desde) - timedelta(days=1)).isoformat()
+            print(f"WARNING: 500 en {desde}, reintentando {antes}→{hasta}")
             try:
-                results = _call_api(prev, hasta)
-            except Exception as e2:
-                print(f"ERROR: fallback también falló: {e2}")
+                return _llamada(antes, hasta)
+            except Exception:
+                print("ERROR: fallback falló también.")
                 return []
-        else:
-            print(f"WARNING: HTTP {code} al llamar {desde}→{hasta}, omitiendo.")
-            return []
-    except requests.RequestException as e:
-        print(f"WARNING: Error de red al llamar {desde}→{hasta}: {e}")
+        print(f"WARNING: HTTP {code} en {desde}→{hasta}")
         return []
-
-    # Si reintentamos con prev→hasta, results incluye dos días; filtramos solo el date original
-    if desde != hasta:
-        return results
-
-    # inicio == fin: filtramos la única fecha que nos importa
-    return [r for r in results if r.get("fecha", "").startswith(desde)]
+    except requests.RequestException as e:
+        print(f"WARNING: red fallida {desde}→{hasta}: {e}")
+        return []
 
 def main():
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Rango a consultar: día siguiente a la última fecha guardada
     if fechas:
         ultima = datetime.fromisoformat(fechas[-1]).date()
         desde  = (ultima + timedelta(days=1)).isoformat()
     else:
-        # Si no hay datos, arrancamos hace 30 días
         desde  = (datetime.now().date() - timedelta(days=30)).isoformat()
     hasta = datetime.now().date().isoformat()
 
-    print(f"Buscando datos de la serie {SERIE_ID} desde {desde} hasta {hasta}...")
+    print(f"Buscando serie {SERIE_ID} desde {desde} hasta {hasta}...")
     obs = obtener_nuevos(desde, hasta)
 
     añadidos = 0
     for x in obs:
-        d = x.get("fecha", "")[:10]
+        d = x.get("d") or x.get("fecha", "")[:10]
+        v = x.get("v") or x.get("valor")
         try:
-            v = float(x.get("valor", 0))
-        except (TypeError, ValueError):
+            v = float(v)
+        except Exception:
             continue
         if d not in data:
             data[d] = v
@@ -95,7 +80,7 @@ def main():
         guardar_pasiva(data)
         print(f"Añadidas {añadidos} observaciones a {ACTIVO_FILE}.")
     else:
-        print("No hubo nuevas observaciones para agregar.")
+        print("No hubo nuevas observaciones.")
 
 if __name__ == "__main__":
     main()
