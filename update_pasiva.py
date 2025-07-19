@@ -5,7 +5,7 @@ import os
 import json
 import requests
 import urllib3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 # Desactivar warnings de SSL inseguro
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -26,37 +26,54 @@ def guardar_pasiva(data):
     with open(ACTIVO_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def _call_api(desde: str, hasta: str):
+    url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
+    resp = requests.get(url, timeout=10, verify=False)
+    resp.raise_for_status()
+    return resp.json().get("results", [])
+
 def obtener_nuevos(desde: str, hasta: str):
     """
-    Llama al endpoint oficial v2.0 para la serie 43 y rango de fechas.
-    Devuelve lista de dicts con keys 'fecha' y 'valor'. Si hay un
-    HTTPError (p.ej. 500), devuelve [] en lugar de fallar.
+    Solicita al API oficial v2.0 el rango dado.
+    Si falla con 500 y era un solo día, reintenta incluyendo el día anterior.
     """
-    url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
     try:
-        resp = requests.get(url, timeout=10, verify=False)
-        resp.raise_for_status()
+        results = _call_api(desde, hasta)
     except requests.exceptions.HTTPError as e:
         code = e.response.status_code if e.response is not None else "?"
-        print(f"WARNING: HTTP {code} al llamar {url}, se omiten resultados para este rango.")
-        return []
+        # Solo fallback si es un 500 y pedimos un solo día
+        if code == 500 and desde == hasta:
+            prev = (date.fromisoformat(desde) - timedelta(days=1)).isoformat()
+            print(f"WARNING: HTTP 500 en {desde}, reintentando rango {prev}→{hasta}")
+            try:
+                results = _call_api(prev, hasta)
+            except Exception as e2:
+                print(f"ERROR: fallback también falló: {e2}")
+                return []
+        else:
+            print(f"WARNING: HTTP {code} al llamar {desde}→{hasta}, omitiendo.")
+            return []
     except requests.RequestException as e:
-        print(f"WARNING: Error de red al llamar {url}: {e}")
+        print(f"WARNING: Error de red al llamar {desde}→{hasta}: {e}")
         return []
 
-    payload = resp.json()
-    return payload.get("results", [])
+    # Si reintentamos con prev→hasta, results incluye dos días; filtramos solo el date original
+    if desde != hasta:
+        return results
+
+    # inicio == fin: filtramos la única fecha que nos importa
+    return [r for r in results if r.get("fecha", "").startswith(desde)]
 
 def main():
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Definir rango de consulta: desde día siguiente a la última fecha guardada
+    # Rango a consultar: día siguiente a la última fecha guardada
     if fechas:
         ultima = datetime.fromisoformat(fechas[-1]).date()
         desde  = (ultima + timedelta(days=1)).isoformat()
     else:
-        # Si no hay datos, obtenemos los últimos 30 días
+        # Si no hay datos, arrancamos hace 30 días
         desde  = (datetime.now().date() - timedelta(days=30)).isoformat()
     hasta = datetime.now().date().isoformat()
 
@@ -65,9 +82,7 @@ def main():
 
     añadidos = 0
     for x in obs:
-        # La API devuelve "fecha":"YYYY-MM-DDT00:00:00"
         d = x.get("fecha", "")[:10]
-        # Convertimos a float; la API oficial usa punto decimal
         try:
             v = float(x.get("valor", 0))
         except (TypeError, ValueError):
