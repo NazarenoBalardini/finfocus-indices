@@ -6,57 +6,54 @@ import json
 import requests
 from datetime import datetime, timedelta
 
-# Código de la serie "Tasa de uso de la Justicia" en la API del BCRA
-SERIE_CODE  = "43"
-API_URL     = f"https://api.estadisticasbcra.com/serie/{SERIE_CODE}"
-API_KEY     = os.getenv("BCRA_API_KEY")  # Se inyecta desde GitHub Secrets
+# 1) Configuración
+SERIE_ID    = "43"
+API_BASE    = "https://api.bcra.gob.ar/estadisticas/v1"
 ACTIVO_FILE = "indices/pasiva.json"
 
 def cargar_pasiva():
-    """Carga el JSON existente o devuelve {} si no existe."""
     if os.path.exists(ACTIVO_FILE):
         with open(ACTIVO_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def guardar_pasiva(data):
-    """Guarda el dict en pasiva.json con indentado."""
     with open(ACTIVO_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def obtener_nuevos(desde, hasta):
+def obtener_nuevos(desde: str, hasta: str):
     """
-    Llama al endpoint de BCRA para la serie 43 entre dos fechas
-    y devuelve lista de {"d":"YYYY-MM-DD","v":valor}.
+    Llama al endpoint oficial para la serie 43, rango YYYY-MM-DD.
+    Devuelve lista de dicts con keys 'fecha' y 'valor'.
     """
-    headers = {"Authorization": f"BEARER {API_KEY}"}
-    params  = {"start_date": desde, "end_date": hasta}
-    resp    = requests.get(API_URL, headers=headers, params=params, timeout=10)
+    url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
+    resp = requests.get(url, timeout=10)
     resp.raise_for_status()
-    return resp.json()
+    payload = resp.json()
+    return payload.get("results", [])
 
 def main():
-    if not API_KEY:
-        raise RuntimeError("Falta la variable de entorno BCRA_API_KEY.")
-    
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Defino rango: desde última fecha +1 día (o hace 30 días si está vacío)
+    # 2) Definir rango: día siguiente a la última fecha registrada
     if fechas:
-        ult   = datetime.fromisoformat(fechas[-1]).date()
-        desde = (ult + timedelta(days=1)).isoformat()
+        ultima = datetime.fromisoformat(fechas[-1]).date()
+        desde  = (ultima + timedelta(days=1)).isoformat()
     else:
-        desde = (datetime.now().date() - timedelta(days=30)).isoformat()
+        desde  = (datetime.now().date() - timedelta(days=30)).isoformat()
     hasta = datetime.now().date().isoformat()
 
-    print(f"Buscando datos de la serie 43 desde {desde} hasta {hasta}...")
+    print(f"Buscando datos de la serie {SERIE_ID} desde {desde} hasta {hasta}...")
     obs = obtener_nuevos(desde, hasta)
 
     añadidos = 0
     for x in obs:
-        d, v = x.get("d"), x.get("v")
-        if d and (d not in data):
+        # La API devuelve "fecha":"YYYY-MM-DDT00:00:00"
+        d = x["fecha"][:10]
+        # Convertimos a float; la API oficial usa punto decimal
+        v = float(x["valor"])
+        if d not in data:
             data[d] = v
             añadidos += 1
 
@@ -64,7 +61,7 @@ def main():
         guardar_pasiva(data)
         print(f"Añadidas {añadidos} observaciones a {ACTIVO_FILE}.")
     else:
-        print("No hay nuevas observaciones para agregar.")
+        print("No hubo nuevas observaciones para agregar.")
 
 if __name__ == "__main__":
     main()
