@@ -5,6 +5,10 @@ import requests
 from bs4 import BeautifulSoup
 import json
 from datetime import datetime
+import urllib3
+
+# Desactivar warnings de SSL no verificado
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURACIÓN ---
 BCRA_URL = "https://www.bcra.gob.ar/PublicacionesEstadisticas/Principales_variables.asp"
@@ -18,7 +22,8 @@ SPAN_ABBR = {
 }
 
 def fetch_rem_median():
-    r = requests.get(BCRA_URL)
+    # Solicitud sin verificación SSL
+    r = requests.get(BCRA_URL, verify=False)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
 
