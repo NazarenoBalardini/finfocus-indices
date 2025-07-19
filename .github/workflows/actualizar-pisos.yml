@@ -4,7 +4,7 @@ name: Actualizar pisos mínimos
 on:
   schedule:
     # Corre todos los días a las 02:00 UTC
-    - cron:  '0 2 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,11 +20,14 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Instalar dependencias (si existen)
-        if: ${{ exists('requirements.txt') }}
+      - name: Instalar dependencias si existen
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "requirements.txt no encontrado — salto instalación de dependencias"
+          fi
 
       - name: Ejecutar script de actualización
         run: |
