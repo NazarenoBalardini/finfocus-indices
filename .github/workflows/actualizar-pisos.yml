@@ -1,16 +1,18 @@
+# .github/workflows/actualizar-pisos.yml
 name: Actualizar pisos mínimos
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    # Corre todos los días a las 02:00 UTC
+    - cron:  '0 2 * * *'
   workflow_dispatch:
 
 jobs:
-  actualizar:
+  actualizar-pisos:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Chequear repo
+      - name: Chequear código
         uses: actions/checkout@v3
 
       - name: Configurar Python
@@ -18,10 +20,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Opción B2: ejecutar sólo si existe requirements.txt
-      - name: Instalar dependencias (si las hay)
+      - name: Instalar dependencias (si existen)
         if: ${{ exists('requirements.txt') }}
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Ejecutar script de actualización
@@ -33,4 +35,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add accidente/*.json
-          git diff --quiet && echo "No hay cambios" || (git commit -m "🔄 Actualiza pisos mínimos" && git push)
+          if git diff --cached --quiet; then
+            echo "No hay cambios en los JSON"
+          else
+            git commit -m "🔄 Actualiza pisos mínimos desde la resolución más reciente"
+            git push
+          fi
