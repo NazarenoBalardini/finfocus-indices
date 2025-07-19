@@ -35,13 +35,21 @@ def obtener_ultimo():
     """
     resp = requests.get(CATALOGO_URL, timeout=10, verify=False)
     resp.raise_for_status()
-    catalogo = resp.json()  # debería ser una lista de dicts
+    catalogo = resp.json()
 
+    # catalogo es una lista; cada elemento puede ser dict o cadena JSON
     for item in catalogo:
-        # Cada item es dict con claves 'c', 'fch', 'valor', etc.
-        if str(item.get("c")) == ID_VARIABLE:
-            fch = item.get("fch")    # formato 'DD/MM/YYYY'
-            valor = item.get("valor")
+        if isinstance(item, str):
+            try:
+                obj = json.loads(item)
+            except json.JSONDecodeError:
+                continue
+        else:
+            obj = item
+
+        if str(obj.get("c")) == ID_VARIABLE:
+            fch = obj.get("fch")      # formato 'DD/MM/YYYY'
+            valor = obj.get("valor")
             # Parsear fecha a ISO
             try:
                 fecha_iso = datetime.strptime(fch, "%d/%m/%Y").date().isoformat()
