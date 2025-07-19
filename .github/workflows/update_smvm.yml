@@ -1,15 +1,25 @@
 name: Update SMVM
 
+# 1) Aseguramos permisos de escritura sobre el contenido
+permissions:
+  contents: write
+
 on:
   schedule:
-    - cron: '0 18 1 * *'    # Corre el día 1 de cada mes a las 18:00 UTC
-  workflow_dispatch:       # También puedes ejecutarlo manualmente
+    - cron: '0 18 1 * *'    # el día 1 de cada mes a las 18:00 UTC
+  workflow_dispatch:       # o manualmente
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout con credenciales
+        uses: actions/checkout@v3
+        with:
+          # forzamos a usar el GITHUB_TOKEN con permisos de escritura
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v4
