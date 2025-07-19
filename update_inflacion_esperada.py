@@ -22,16 +22,16 @@ def fetch_rem_median():
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Busca en todas las filas de tablas la etiqueta exacta
     for tr in soup.select("table tr"):
         td = tr.find("td")
-        if not td: continue
+        if not td:
+            continue
         texto = td.get_text(strip=True)
         if "REM próximos 12 meses" in texto and "MEDIANA" in texto:
             cols = [c.get_text(strip=True) for c in tr.find_all("td")]
-            # Ejemplo de cols: ["Inflación esperada - REM próximos 12 meses - MEDIANA (variación en % i.a)", "30/06/2025", "20,8"]
-            fecha_str = cols[1]   # p.ej. "30/06/2025"
-            valor_str = cols[2]   # p.ej. "20,8"
+            # cols = ["Título", "dd/mm/aaaa", "valor"]
+            fecha_str = cols[1]
+            valor_str = cols[2]
             return fecha_str, float(valor_str.replace(",", "."))
     raise RuntimeError("No encontré la fila REM MEDIANA en la tabla del BCRA")
 
@@ -45,14 +45,14 @@ def main():
     fecha, valor = fetch_rem_median()
     clave = to_key(fecha)
 
-    # Carga JSON existente
+    # Carga el JSON existente (un dict mes-aa → valor)
     with open(LOCAL_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Si fuera lista de objetos, adaptá aquí; asumo un dict:
+    # Actualiza o añade la clave
     data[clave] = valor
 
-    # Guarda
+    # Guarda con indentación legible
     with open(LOCAL_JSON, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
