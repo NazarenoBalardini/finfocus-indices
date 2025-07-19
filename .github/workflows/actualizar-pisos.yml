@@ -1,0 +1,35 @@
+name: Actualizar pisos mínimos
+
+on:
+  schedule:
+    # Corre cada día a las 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:    # para lanzarlo manualmente desde la UI de GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Chequear repo
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+
+      - name: Ejecutar script de actualización
+        run: |
+          python scripts/actualizar_pisos.py
+
+      - name: Hacer commit y push de cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add accidente/*.json
+          git diff --quiet && echo "No hay cambios" || (git commit -m "🔄 Actualiza pisos mínimos" && git push)
