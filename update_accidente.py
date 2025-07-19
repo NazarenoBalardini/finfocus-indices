@@ -16,17 +16,17 @@ ART_MAP = {
     "Art. 14.2 A": "14A",
     "Art. 14.2 B": "14B",
     "Art. 15.2":   "15",
-    "Art. 3":      "3",        # si en la tabla figura sólo "Art. 3" para el adicional
+    "Art. 3":      "3",  # si en la tabla figura sólo "Art. 3" para el adicional
 }
 
 async def fetch_latest_resolution_url(page):
     # 1) vamos a la página de listado
     await page.goto(INDEX_URL, wait_until="networkidle")
-    # 2) esperamos cualquier tabla (es la de fichas)
-    await page.wait_for_selector("table")
+    # 2) esperamos la tabla de listados que tiene la clase .listado-fichas
+    await page.wait_for_selector("table.listado-fichas", timeout=60000)
 
-    # 3) selecciono la ÚLTIMA fila de la tabla y clickeo su link
-    ultima_fila = page.locator("table tbody tr").last
+    # 3) selecciono la ÚLTIMA fila de esa tabla y clickeo su link
+    ultima_fila = page.locator("table.listado-fichas tbody tr").last
     await ultima_fila.locator("a[href*='/ficha/']").click()
 
     # 4) espero a que cargue la ficha concreta
@@ -45,7 +45,7 @@ async def fetch_data():
         await page.goto(latest_url)
         # pulsamos el botón para mostrar "Pisos mínimos"
         await page.click("text=/Pisos mínimos/i")
-        await page.wait_for_selector("table")
+        await page.wait_for_selector("table", timeout=60000)
 
         html = await page.content()
         await browser.close()
@@ -81,4 +81,3 @@ async def fetch_data():
 
 if __name__ == "__main__":
     asyncio.run(fetch_data())
-
