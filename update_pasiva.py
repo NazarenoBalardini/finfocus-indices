@@ -7,11 +7,11 @@ import requests
 import urllib3
 from datetime import datetime, timedelta
 
-# Suprimir el warning de "InsecureRequestWarning"
+# Desactivar warnings de SSL inseguro
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 SERIE_ID    = "43"
-API_BASE    = "https://api.bcra.gob.ar/estadisticas/v1"
+API_BASE    = "https://api.bcra.gob.ar/estadisticas/v2.0"
 ACTIVO_FILE = "indices/pasiva.json"
 
 def cargar_pasiva():
@@ -28,7 +28,7 @@ def guardar_pasiva(data):
 
 def obtener_nuevos(desde: str, hasta: str):
     """
-    Llama al endpoint oficial para la serie 43, rango YYYY-MM-DD.
+    Llama al endpoint oficial v2.0 para la serie 43 y rango de fechas.
     Devuelve lista de dicts con keys 'fecha' y 'valor'.
     """
     url = f"{API_BASE}/datosvariable/{SERIE_ID}/{desde}/{hasta}"
@@ -41,7 +41,7 @@ def main():
     data   = cargar_pasiva()
     fechas = sorted(data.keys())
 
-    # Defino rango: día siguiente a la última fecha registrada
+    # Determinar rango de consulta
     if fechas:
         ultima = datetime.fromisoformat(fechas[-1]).date()
         desde  = (ultima + timedelta(days=1)).isoformat()
