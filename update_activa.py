@@ -10,54 +10,93 @@ from bs4 import BeautifulSoup
 
 URL         = "https://www.bna.com.ar/home/informacionalusuariofinanciero"
 ACTIVA_FILE = "indices/activa.json"
+DATE_FMT    = "%d/%m/%Y"  # para parsear “vigente desde”
 
-def obtener_tna_pct():
+def obtener_tna_y_vigencia():
+    """
+    Extrae del HTML:
+      - el porcentaje T.N.A.
+      - la fecha 'Vigente desde dd/mm/yyyy'
+    """
     resp = requests.get(URL, timeout=10)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
+
+    # 1) Buscar T.N.A.
+    tna_pct = None
     for li in soup.find_all("li"):
         txt = li.get_text(strip=True)
         if "T.N.A." in txt:
             m = re.search(r'([\d]+,[\d]+)%', txt)
             if m:
-                return float(m.group(1).replace(",", "."))
-    raise RuntimeError("No encontré la T.N.A. en el HTML.")
+                tna_pct = float(m.group(1).replace(",", "."))
+                break
+    if tna_pct is None:
+        raise RuntimeError("No encontré la T.N.A. en el HTML.")
+
+    # 2) Buscar “Vigente desde DD/MM/YYYY”
+    fecha_vig = None
+    texto = soup.get_text(" ", strip=True)
+    m2 = re.search(r'Vigente desde\s+(\d{2}/\d{2}/\d{4})', texto)
+    if m2:
+        fecha_vig = datetime.strptime(m2.group(1), DATE_FMT).date()
+    else:
+        # Si no existe el texto, asumimos inicio hoy
+        fecha_vig = datetime.utcnow().date()
+
+    return tna_pct, fecha_vig
 
 def cargar_activa():
-    print(f"DEBUG: ¿Existe {ACTIVA_FILE}? → {os.path.exists(ACTIVA_FILE)}")
-    data = json.load(open(ACTIVA_FILE, "r", encoding="utf-8"))
-    print("DEBUG: Contenido actual de activa.json:")
-    print(json.dumps(data, indent=2))
-    return data
+    with open(ACTIVA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 def guardar_activa(data):
     with open(ACTIVA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print("DEBUG: Se ha escrito el JSON con las fechas:")
-    print(json.dumps(data, indent=2))
 
 def main():
     data = cargar_activa()
+    # convertir claves a fechas
+    fechas = sorted(datetime.fromisoformat(d).date() for d in data.keys())
+    ultimo_guardado = fechas[-1]
+    
+    tna_pct, fecha_vigencia = obtener_tna_y_vigencia()
+    tasa_diaria = (tna_pct / 100) / 365
 
-    fechas = sorted(data.keys())
-    print("DEBUG: Fechas ordenadas:", fechas)
+    # determinamos desde cuándo reescribir:
+    # si la vigencia es anterior o igual al último guardado, 
+    #   arrancamos desde fecha_vigencia para reescribir ese tramo.
+    # si es posterior (cambio normal futuro), 
+    #   arrancamos un día después del último guardado.
+    if fecha_vigencia <= ultimo_guardado:
+        inicio = fecha_vigencia
+    else:
+        inicio = ultimo_guardado + timedelta(days=1)
 
-    ult_fecha = datetime.fromisoformat(fechas[-1]).date()
-    ult_valor = float(data[fechas[-1]])
-    print(f"DEBUG: Última fecha → {ult_fecha}, valor → {ult_valor}")
+    hoy = datetime.utcnow().date()
+    if inicio > hoy:
+        print("No hay nuevos días para procesar.")
+        return
 
-    sig_fecha = (ult_fecha + timedelta(days=1)).isoformat()
-    print("DEBUG: Fecha siguiente a añadir:", sig_fecha)
+    # tomo el valor del día anterior a 'inicio'
+    prev_date = inicio - timedelta(days=1)
+    prev_val = float(data[prev_date.isoformat()])
 
-    tna_pct     = obtener_tna_pct()
-    tasa_diaria = (tna_pct/100) / 365
-    print(f"DEBUG: TNA_pct={tna_pct}%, tasa_diaria={tasa_diaria}")
+    # elimino cualquier fecha >= inicio (para reescritura limpia)
+    for d in list(data.keys()):
+        if datetime.fromisoformat(d).date() >= inicio:
+            del data[d]
 
-    nuevo_valor = round(ult_valor * (1 + tasa_diaria), 6)
-    print("DEBUG: Nuevo valor calculado:", nuevo_valor)
+    # genero valores día a día desde 'inicio' hasta hoy
+    date = inicio
+    while date <= hoy:
+        nueva = round(prev_val * (1 + tasa_diaria), 6)
+        data[date.isoformat()] = nueva
+        prev_val = nueva
+        date += timedelta(days=1)
 
-    data[sig_fecha] = nuevo_valor
     guardar_activa(data)
+    print(f"Actualizado desde {inicio.isoformat()} hasta {hoy.isoformat()}.")
 
 if __name__ == "__main__":
     main()
