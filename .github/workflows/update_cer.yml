@@ -9,7 +9,7 @@ on:
       - main
   workflow_dispatch:
   schedule:
-    - cron: '0 10 * * *'  # todos los días a las 10:00 UTC
+    - cron: '0 9 * * *'  # todos los días a las 09:00 UTC
 
 jobs:
   update_cer:
