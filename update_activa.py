@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
 import json
 import re
 import requests
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
-URL         = "https://www.bna.com.ar/home/informacionalusuariofinanciero"
+URL = "https://www.bna.com.ar/home/informacionalusuariofinanciero"
 ACTIVA_FILE = "indices/activa.json"
-DATE_FMT    = "%d/%m/%Y"  # para parsear “vigente desde”
+DATE_FMT = "%d/%m/%Y"
 
 def obtener_tna_y_vigencia():
     """
     Extrae del HTML:
       - el porcentaje T.N.A.
-      - la fecha 'Vigente desde dd/mm/yyyy'
+      - la fecha 'Vigente desde DD/MM/YYYY'
     """
     resp = requests.get(URL, timeout=10)
     resp.raise_for_status()
@@ -34,21 +33,29 @@ def obtener_tna_y_vigencia():
     if tna_pct is None:
         raise RuntimeError("No encontré la T.N.A. en el HTML.")
 
-    # 2) Buscar “Vigente desde DD/MM/YYYY”
-    fecha_vig = None
+    # 2) Buscar "Vigente desde DD/MM/YYYY"
     texto = soup.get_text(" ", strip=True)
     m2 = re.search(r'Vigente desde\s+(\d{2}/\d{2}/\d{4})', texto)
     if m2:
-        fecha_vig = datetime.strptime(m2.group(1), DATE_FMT).date()
+        fecha_vigencia = datetime.strptime(m2.group(1), DATE_FMT).date()
     else:
         # Si no existe el texto, asumimos inicio hoy
-        fecha_vig = datetime.utcnow().date()
+        fecha_vigencia = datetime.utcnow().date()
 
-    return tna_pct, fecha_vig
+    return tna_pct, fecha_vigencia
 
 def cargar_activa():
+    """
+    Lee el archivo activa.json, limpia los trailing commas
+    y devuelve el dict resultante.
+    """
     with open(ACTIVA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        text = f.read()
+
+    # Eliminar comas antes de } o ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    return json.loads(text)
 
 def guardar_activa(data):
     with open(ACTIVA_FILE, "w", encoding="utf-8") as f:
@@ -56,18 +63,14 @@ def guardar_activa(data):
 
 def main():
     data = cargar_activa()
-    # convertir claves a fechas
+    # Ordenar y obtener la última fecha guardada
     fechas = sorted(datetime.fromisoformat(d).date() for d in data.keys())
     ultimo_guardado = fechas[-1]
-    
+
     tna_pct, fecha_vigencia = obtener_tna_y_vigencia()
     tasa_diaria = (tna_pct / 100) / 365
 
-    # determinamos desde cuándo reescribir:
-    # si la vigencia es anterior o igual al último guardado, 
-    #   arrancamos desde fecha_vigencia para reescribir ese tramo.
-    # si es posterior (cambio normal futuro), 
-    #   arrancamos un día después del último guardado.
+    # Determinar desde cuándo reescribir:
     if fecha_vigencia <= ultimo_guardado:
         inicio = fecha_vigencia
     else:
@@ -78,16 +81,16 @@ def main():
         print("No hay nuevos días para procesar.")
         return
 
-    # tomo el valor del día anterior a 'inicio'
+    # Valor del día anterior a 'inicio'
     prev_date = inicio - timedelta(days=1)
     prev_val = float(data[prev_date.isoformat()])
 
-    # elimino cualquier fecha >= inicio (para reescritura limpia)
+    # Eliminar fechas >= inicio para reescritura limpia
     for d in list(data.keys()):
         if datetime.fromisoformat(d).date() >= inicio:
             del data[d]
 
-    # genero valores día a día desde 'inicio' hasta hoy
+    # Generar nuevos valores desde 'inicio' hasta hoy
     date = inicio
     while date <= hoy:
         nueva = round(prev_val * (1 + tasa_diaria), 6)
