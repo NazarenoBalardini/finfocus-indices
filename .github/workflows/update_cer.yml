@@ -1,9 +1,14 @@
+# .github/workflows/update_cer.yml
 name: Actualizar CER
+
+# ⚠️ Necesario para dar permiso de push al token de Actions
+permissions:
+  contents: write
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *'   # todos los días a la 1:00 UTC
+    - cron: '0 1 * * *'
 
 jobs:
   actualizar-cer:
@@ -13,6 +18,8 @@ jobs:
       - name: Checkout del repositorio
         uses: actions/checkout@v3
         with:
+          # explicitá el token y permití persistir credenciales
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           persist-credentials: true
 
