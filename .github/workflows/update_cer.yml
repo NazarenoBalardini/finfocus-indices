@@ -1,40 +1,45 @@
-name: 🔄 Actualizar cer.json
-
-permissions:
-  contents: write
+name: Actualizar CER
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
   schedule:
-    - cron: '0 9 * * *'  # todos los días a las 09:00 UTC
+    # Corre todos los días a la 1:00 AM UTC
+    - cron: '0 1 * * *'
 
 jobs:
-  update_cer:
+  actualizar-cer:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout del repositorio
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Setup Python
+      - name: Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
       - name: Instalar dependencias
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 urllib3
 
       - name: Ejecutar update_cer.py
         run: python update_cer.py
 
-      - name: Commit & Push cer.json si cambió
+      - name: Sincronizar con main (pull/rebase)
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase
+
+      - name: Commit & Push cer.json si cambió
+        run: |
           git add indices/cer.json
           if ! git diff --cached --quiet; then
-            git commit -m "🔄 Actualiza cer.json"
-            git push
+            git commit -m "Actualiza cer.json"
+            git push origin main
+          else
+            echo "✅ No hay cambios en cer.json"
           fi
