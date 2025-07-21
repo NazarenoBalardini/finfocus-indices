@@ -3,8 +3,7 @@ name: Actualizar CER
 on:
   workflow_dispatch:
   schedule:
-    # Corre todos los días a la 1:00 AM UTC
-    - cron: '0 1 * * *'
+    - cron: '0 1 * * *'   # todos los días a la 1:00 UTC
 
 jobs:
   actualizar-cer:
@@ -17,6 +16,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sincronizar con main (pull/rebase)
+        run: git pull origin main --rebase
+
       - name: Configurar Python
         uses: actions/setup-python@v4
         with:
@@ -27,14 +34,6 @@ jobs:
 
       - name: Ejecutar update_cer.py
         run: python update_cer.py
-
-      - name: Configurar Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Sincronizar con main (pull/rebase)
-        run: git pull origin main --rebase
 
       - name: Commit & Push cer.json si cambió
         run: |
